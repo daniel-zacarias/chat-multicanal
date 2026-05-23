@@ -1,0 +1,45 @@
+services:
+  auth-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: chat123
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth_user -d auth_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - auth-postgres-data:/var/lib/postgresql/data
+
+  history-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: history_db
+      POSTGRES_USER: history_user
+      POSTGRES_PASSWORD: chat123
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U history_user -d history_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - history-postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+
+volumes:
+  auth-postgres-data:
+  history-postgres-data:
+  redis-data:
