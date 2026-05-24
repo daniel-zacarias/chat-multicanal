@@ -1,12 +1,13 @@
 services:
+  # ----------------------------------------------------------------
+  # BANCOS DE DADOS
+  # ----------------------------------------------------------------
   auth-db:
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: auth_db
       POSTGRES_USER: auth_user
-      POSTGRES_PASSWORD: chat123
-    ports:
-      - "5432:5432"
+      POSTGRES_PASSWORD: ${DB_AUTH_PASSWORD}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U auth_user -d auth_db"]
       interval: 5s
@@ -14,15 +15,15 @@ services:
       retries: 5
     volumes:
       - auth-postgres-data:/var/lib/postgresql/data
+    networks:
+      - chat-network
 
   history-db:
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: history_db
       POSTGRES_USER: history_user
-      POSTGRES_PASSWORD: chat123
-    ports:
-      - "5433:5432"
+      POSTGRES_PASSWORD: ${DB_HISTORY_PASSWORD}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U history_user -d history_db"]
       interval: 5s
@@ -30,16 +31,87 @@ services:
       retries: 5
     volumes:
       - history-postgres-data:/var/lib/postgresql/data
+    networks:
+      - chat-network
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis-data:/data
+    networks:
+      - chat-network
+
+  # ----------------------------------------------------------------
+  # AUTH SERVICE
+  # ----------------------------------------------------------------
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      DB_URL: jdbc:postgresql://auth-db:5432/auth_db
+      DB_USERNAME: auth_user
+      DB_PASSWORD: ${DB_AUTH_PASSWORD}
+      DDL_AUTO: validate
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-chat-multicanal}
+      # CORS centralizado no gateway; auth-service não recebe requests diretos de browsers
+      CORS_ALLOWED_ORIGINS: "http://gateway:8080"
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    networks:
+      - chat-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://localhost:3001/actuator/health 2>/dev/null || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # ----------------------------------------------------------------
+  # GATEWAY
+  # ----------------------------------------------------------------
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-chat-multicanal}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      AUTH_SERVICE_HOST: auth-service
+      AUTH_SERVICE_PORT: 3001
+      CHAT_SERVICE_HOST: chat-service
+      CHAT_SERVICE_PORT: 3002
+      PRESENCE_SERVICE_HOST: presence-service
+      PRESENCE_SERVICE_PORT: 3003
+      HISTORY_SERVICE_HOST: history-service
+      HISTORY_SERVICE_PORT: 3004
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - chat-network
 
 volumes:
   auth-postgres-data:
   history-postgres-data:
   redis-data:
+
+networks:
+  chat-network:
+    driver: bridge
