@@ -17,3 +17,6 @@
 
 # Docker volumes
 **/postgres-data/
+
+# agents
+**/.claude/**
