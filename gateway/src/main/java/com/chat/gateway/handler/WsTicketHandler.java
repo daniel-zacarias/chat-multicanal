@@ -41,13 +41,15 @@ public class WsTicketHandler {
         }
 
         String token = authHeader.substring(7);
-        if (!jwtService.isValid(token)) {
-            return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new ErrorResponse(401, "Unauthorized")));
-        }
-
-        String userId = jwtService.extractUserId(token);
-        return wsTicketService.createTicket(userId)
-                .map(ticket -> ResponseEntity.ok((Object) Map.of("ticket", ticket)));
+        return jwtService.isValidReactive(token)
+                .flatMap(valid -> {
+                    if (!valid) {
+                        return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                                .<Object>body(new ErrorResponse(401, "Unauthorized")));
+                    }
+                    String userId = jwtService.extractUserId(token);
+                    return wsTicketService.createTicket(userId)
+                            .map(ticket -> ResponseEntity.ok((Object) Map.of("ticket", ticket)));
+                });
     }
 }

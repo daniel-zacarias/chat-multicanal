@@ -6,8 +6,12 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
 
 import javax.crypto.SecretKey;
 
@@ -19,6 +23,10 @@ public class JwtService {
 
     @Value("${jwt.issuer}")
     private String issuer;
+
+    @Lazy
+    @Autowired
+    private ReactiveStringRedisTemplate redisTemplate;
 
     @PostConstruct
     void validateSecret() {
@@ -38,12 +46,31 @@ public class JwtService {
         return parseClaims(token).getSubject();
     }
 
+    public String extractJti(String token) {
+        return parseClaims(token).getId();
+    }
+
     public boolean isValid(String token) {
         try {
             parseClaims(token);
             return true;
         } catch (JwtException | IllegalArgumentException e) {
             return false;
+        }
+    }
+
+    public Mono<Boolean> isValidReactive(String token) {
+        try {
+            Claims claims = parseClaims(token);
+            String jti = claims.getId();
+            if (jti == null) {
+                return Mono.just(true);
+            }
+            return redisTemplate.hasKey("jwt:blocked:" + jti)
+                    .map(blocked -> !blocked)
+                    .onErrorReturn(true);
+        } catch (JwtException | IllegalArgumentException e) {
+            return Mono.just(false);
         }
     }
 

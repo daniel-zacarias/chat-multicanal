@@ -2,11 +2,16 @@ package com.chat.authservice.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.Date;
 import java.util.UUID;
 
+import org.aspectj.lang.annotation.Before;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -28,19 +33,21 @@ import io.jsonwebtoken.security.Keys;
 class JwtServiceTest {
 
     // 32-byte key encoded as Base64 (matches minimum required by validateSecret())
-    private static final String VALID_SECRET =
-            "dGVzdC1zZWNyZXQta2V5LXRoYXQtaXMtbG9uZy1lbm91Z2gtZm9yLUhTMjU2";
+    private static final String VALID_SECRET = "dGVzdC1zZWNyZXQta2V5LXRoYXQtaXMtbG9uZy1lbm91Z2gtZm9yLUhTMjU2";
     private static final String ISSUER = "chat-multicanal";
     private static final long EXPIRATION_MS = 900_000L; // 15 min
 
     private JwtService jwtService;
+    private JwtBlocklistService jwtBlocklistService;
 
     @BeforeEach
     void setUp() {
         jwtService = new JwtService();
+        jwtBlocklistService = mock(JwtBlocklistService.class);
         ReflectionTestUtils.setField(jwtService, "secret", VALID_SECRET);
         ReflectionTestUtils.setField(jwtService, "expiration", EXPIRATION_MS);
         ReflectionTestUtils.setField(jwtService, "issuer", ISSUER);
+        ReflectionTestUtils.setField(jwtService, "jwtBlocklistService", jwtBlocklistService);
         // Trigger @PostConstruct manually
         jwtService.validateSecret();
     }
@@ -55,7 +62,7 @@ class JwtServiceTest {
     }
 
     // ------------------------------------------------------------------ //
-    //  validateSecret                                                       //
+    // validateSecret //
     // ------------------------------------------------------------------ //
 
     @Nested
@@ -99,7 +106,7 @@ class JwtServiceTest {
     }
 
     // ------------------------------------------------------------------ //
-    //  generateToken                                                        //
+    // generateToken //
     // ------------------------------------------------------------------ //
 
     @Nested
@@ -171,13 +178,14 @@ class JwtServiceTest {
                     .getPayload();
 
             long expMs = claims.getExpiration().getTime();
-            // JWT truncates dates to second precision, so allow up to 999 ms under the lower bound
+            // JWT truncates dates to second precision, so allow up to 999 ms under the
+            // lower bound
             assertThat(expMs).isBetween(before + EXPIRATION_MS - 999, after + EXPIRATION_MS);
         }
     }
 
     // ------------------------------------------------------------------ //
-    //  isValid                                                              //
+    // isValid //
     // ------------------------------------------------------------------ //
 
     @Nested
@@ -188,6 +196,7 @@ class JwtServiceTest {
         @DisplayName("returns true for a freshly generated token")
         void trueForValidToken() {
             String token = jwtService.generateToken(buildUser());
+            when(jwtBlocklistService.isBlocked(any())).thenReturn(false);
             assertThat(jwtService.isValid(token)).isTrue();
         }
 
@@ -211,8 +220,7 @@ class JwtServiceTest {
         @DisplayName("returns false for a token signed with a different key")
         void falseForWrongKey() {
             // Generate token with a different secret
-            String differentSecret =
-                    "ZGlmZmVyZW50LXNlY3JldC1rZXktdGhhdC1pcy1sb25nLWVub3VnaA==";
+            String differentSecret = "ZGlmZmVyZW50LXNlY3JldC1rZXktdGhhdC1pcy1sb25nLWVub3VnaA==";
             String alienToken = Jwts.builder()
                     .subject("some-user")
                     .issuer(ISSUER)
@@ -258,7 +266,7 @@ class JwtServiceTest {
     }
 
     // ------------------------------------------------------------------ //
-    //  extractUserId                                                        //
+    // extractUserId //
     // ------------------------------------------------------------------ //
 
     @Nested

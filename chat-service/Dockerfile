@@ -1,14 +1,12 @@
 # Stage 1: Build
-FROM eclipse-temurin:21-jdk-alpine AS builder
+FROM maven:3.9-eclipse-temurin-21-alpine AS builder
 WORKDIR /app
 
 COPY pom.xml .
-COPY mvnw .
-COPY .mvn .mvn
-RUN sed -i 's/\r$//' mvnw && chmod +x mvnw && ./mvnw dependency:go-offline -q
+RUN mvn dependency:go-offline -q
 
 COPY src ./src
-RUN ./mvnw package -DskipTests -q
+RUN mvn package -DskipTests -q
 
 # Stage 2: Runtime (JRE apenas — imagem menor)
 FROM eclipse-temurin:21-jre-alpine AS runtime
@@ -17,9 +15,9 @@ WORKDIR /app
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
 
-COPY --from=builder /app/target/gateway-*.jar app.jar
+COPY --from=builder /app/target/chat-service-*.jar app.jar
 
-EXPOSE 8080
+EXPOSE 3002
 
 ENTRYPOINT ["java", \
   "-XX:+UseContainerSupport", \

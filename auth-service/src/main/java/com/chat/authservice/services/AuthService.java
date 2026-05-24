@@ -1,5 +1,6 @@
 package com.chat.authservice.services;
 
+import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -17,6 +18,7 @@ import com.chat.authservice.dtos.RegisterRequest;
 import com.chat.authservice.dtos.UserResponse;
 import com.chat.authservice.models.User;
 import com.chat.authservice.repositories.UserRepository;
+import com.chat.authservice.security.JwtBlocklistService;
 import com.chat.authservice.security.JwtService;
 
 import jakarta.annotation.PostConstruct;
@@ -32,6 +34,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
+    private final JwtBlocklistService jwtBlocklistService;
 
     // Computed at startup to equalize login timing when username is not found
     private String dummyHash;
@@ -72,7 +75,7 @@ public class AuthService {
 
         User user = userOpt.get();
         if (!passwordEncoder.matches(request.password(), user.getPassword())) {
-            log.warn("Failed login attempt for username={}", request.username());
+            log.warn("Failed login attempt for userId={}", user.getId());
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
         }
 
@@ -88,7 +91,17 @@ public class AuthService {
         return new AuthResponse(jwtService.generateToken(user), newRefreshToken, toResponse(user));
     }
 
-    public void logout(RefreshRequest request) {
+    public void logout(RefreshRequest request, String rawAuthHeader) {
+        if (rawAuthHeader != null && rawAuthHeader.startsWith("Bearer ")) {
+            String token = rawAuthHeader.substring(7);
+            try {
+                String jti = jwtService.extractJti(token);
+                long remaining = jwtService.extractExpirationMillis(token) - System.currentTimeMillis();
+                if (remaining > 0) {
+                    jwtBlocklistService.block(jti, Duration.ofMillis(remaining));
+                }
+            } catch (Exception ignored) {}
+        }
         refreshTokenService.revokeToken(request.refreshToken());
     }
 

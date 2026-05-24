@@ -50,8 +50,7 @@ import com.chat.authservice.services.AuthService;
  * AuthService, JwtService, and JwtAuthFilter are mocked so no database is
  * needed.
  */
-@WebMvcTest(value = AuthController.class,
-        excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = RateLimitFilter.class))
+@WebMvcTest(value = AuthController.class, excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = RateLimitFilter.class))
 @Import({ SecurityConfig.class, JwtAuthFilter.class })
 @DisplayName("AuthController (WebMvcTest)")
 class AuthControllerTest {
@@ -82,8 +81,8 @@ class AuthControllerTest {
                 // @WebMvcTest from spring-boot-starter-webmvc-test does not wire security
                 // automatically; springSecurity() adds the springSecurityFilterChain.
                 mockMvc = MockMvcBuilders.webAppContextSetup(wac)
-                        .apply(springSecurity())
-                        .build();
+                                .apply(springSecurity())
+                                .build();
 
                 userResponse = new UserResponse(
                                 UUID.randomUUID().toString(),
@@ -346,7 +345,7 @@ class AuthControllerTest {
                 @Test
                 @DisplayName("returns 204 on successful logout")
                 void returns204OnSuccess() throws Exception {
-                        doNothing().when(authService).logout(any(RefreshRequest.class));
+                        doNothing().when(authService).logout(any(RefreshRequest.class), any(String.class));
 
                         mockMvc.perform(post("/auth/logout")
                                         .contentType(MediaType.APPLICATION_JSON)

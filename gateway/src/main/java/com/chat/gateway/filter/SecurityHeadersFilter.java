@@ -14,7 +14,7 @@ public class SecurityHeadersFilter implements WebFilter {
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
-        return chain.filter(exchange).then(Mono.fromRunnable(() -> {
+        exchange.getResponse().beforeCommit(() -> {
             var headers = exchange.getResponse().getHeaders();
             headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
             headers.set("X-Content-Type-Options", "nosniff");
@@ -24,6 +24,8 @@ public class SecurityHeadersFilter implements WebFilter {
                 headers.set("Cache-Control", "no-store");
                 headers.set("Pragma", "no-cache");
             }
-        }));
+            return Mono.empty();
+        });
+        return chain.filter(exchange);
     }
 }

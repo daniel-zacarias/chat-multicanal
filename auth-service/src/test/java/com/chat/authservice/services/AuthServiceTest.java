@@ -292,8 +292,9 @@ class AuthServiceTest {
         @DisplayName("delegates token revocation to RefreshTokenService")
         void delegatesRevocation() {
             RefreshRequest request = new RefreshRequest("some-refresh");
+            doNothing().when(refreshTokenService).revokeToken("some-refresh");
 
-            authService.logout(request);
+            authService.logout(request, "user-id");
 
             verify(refreshTokenService).revokeToken("some-refresh");
         }

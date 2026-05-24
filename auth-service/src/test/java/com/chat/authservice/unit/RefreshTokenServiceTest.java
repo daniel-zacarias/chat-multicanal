@@ -52,7 +52,7 @@ class RefreshTokenServiceTest {
     }
 
     // ------------------------------------------------------------------ //
-    //  createRefreshToken                                                   //
+    // createRefreshToken //
     // ------------------------------------------------------------------ //
 
     @Nested
@@ -114,7 +114,7 @@ class RefreshTokenServiceTest {
         void generatesUniqueTokenValues() {
             when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-            String first  = refreshTokenService.createRefreshToken(user);
+            String first = refreshTokenService.createRefreshToken(user);
             String second = refreshTokenService.createRefreshToken(user);
 
             assertThat(first).isNotEqualTo(second);
@@ -122,7 +122,7 @@ class RefreshTokenServiceTest {
     }
 
     // ------------------------------------------------------------------ //
-    //  validateAndRotate                                                    //
+    // validateAndRotate //
     // ------------------------------------------------------------------ //
 
     @Nested
@@ -173,16 +173,16 @@ class RefreshTokenServiceTest {
             valid.setExpiresAt(LocalDateTime.now().plusDays(7));
 
             when(refreshTokenRepository.findByToken("valid-token")).thenReturn(Optional.of(valid));
+            when(refreshTokenRepository.deleteByTokenValue("valid-token")).thenReturn(1);
 
             User returned = refreshTokenService.validateAndRotate("valid-token");
 
             assertThat(returned).isSameAs(user);
-            verify(refreshTokenRepository).delete(valid);
         }
     }
 
     // ------------------------------------------------------------------ //
-    //  revokeToken                                                          //
+    // revokeToken //
     // ------------------------------------------------------------------ //
 
     @Nested

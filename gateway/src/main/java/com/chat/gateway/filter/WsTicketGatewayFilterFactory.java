@@ -13,8 +13,10 @@ import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
+import tools.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 @Component
 public class WsTicketGatewayFilterFactory
@@ -23,10 +25,12 @@ public class WsTicketGatewayFilterFactory
     private static final Logger log = LoggerFactory.getLogger(WsTicketGatewayFilterFactory.class);
 
     private final WsTicketService wsTicketService;
+    private final ObjectMapper mapper;
 
-    public WsTicketGatewayFilterFactory(WsTicketService wsTicketService) {
+    public WsTicketGatewayFilterFactory(WsTicketService wsTicketService, ObjectMapper mapper) {
         super(Config.class);
         this.wsTicketService = wsTicketService;
+        this.mapper = mapper;
     }
 
     @Override
@@ -47,12 +51,17 @@ public class WsTicketGatewayFilterFactory
                                     h.add("X-User-Id", userId);
                                 })
                                 .build();
-                        return chain.filter(exchange.mutate().request(mutated).build());
+                        // thenReturn prevents switchIfEmpty from firing when chain.filter()
+                        // completes normally as Mono<Void> (which is always "empty").
+                        return chain.filter(exchange.mutate().request(mutated).build())
+                                .thenReturn(userId);
                     })
                     .switchIfEmpty(Mono.defer(() -> {
                         log.warn("Invalid or expired WS ticket: {}", ticket);
-                        return unauthorizedResponse(exchange, "Invalid or expired WebSocket ticket");
-                    }));
+                        return unauthorizedResponse(exchange, "Invalid or expired WebSocket ticket")
+                                .thenReturn("");
+                    }))
+                    .then();
         };
     }
 
@@ -60,10 +69,14 @@ public class WsTicketGatewayFilterFactory
         ServerHttpResponse response = exchange.getResponse();
         response.setStatusCode(HttpStatus.UNAUTHORIZED);
         response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
-        String escaped = message.replace("\\", "\\\\").replace("\"", "\\\"");
-        byte[] body = String.format("{\"status\":401,\"message\":\"%s\"}", escaped)
-                .getBytes(StandardCharsets.UTF_8);
-        DataBuffer buffer = response.bufferFactory().wrap(body);
+        String body;
+        try {
+            body = mapper.writeValueAsString(Map.of("status", 401, "message", message));
+        } catch (Exception e) {
+            body = "{\"status\":401,\"message\":\"Unauthorized\"}";
+        }
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        DataBuffer buffer = response.bufferFactory().wrap(bytes);
         return response.writeWith(Mono.just(buffer));
     }
 
