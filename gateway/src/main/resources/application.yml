@@ -1,0 +1,122 @@
+spring:
+  application:
+    name: gateway
+
+  data:
+    redis:
+      host: ${SPRING_REDIS_HOST:redis}
+      port: ${SPRING_REDIS_PORT:6379}
+      timeout: 2000ms
+
+  cloud:
+    gateway:
+      server:
+        webflux:
+          forwarded:
+            enabled: true
+          x-forwarded:
+            enabled: true
+            for-enabled: true
+            proto-enabled: true
+            host-enabled: true
+            port-enabled: true
+
+          # H-2: Apenas proxies dentro da rede Docker interna são confiáveis para X-Forwarded-*
+          # Em produção, substituir pelo CIDR do load-balancer.
+          trusted-proxies: "172.16.0.0/12"
+
+          default-filters:
+            - RemoveRequestHeader=X-User-Id
+
+          routes:
+
+            # ----------------------------------------------------------------
+            # AUTH SERVICE — rotas públicas com rate limiting (H-1)
+            # ----------------------------------------------------------------
+            - id: auth-public
+              uri: http://${AUTH_SERVICE_HOST:auth-service}:${AUTH_SERVICE_PORT:3001}
+              predicates:
+                - Path=/auth/register,/auth/login,/auth/refresh,/auth/logout
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    redis-rate-limiter.replenishRate: 5
+                    redis-rate-limiter.burstCapacity: 10
+                    redis-rate-limiter.requestedTokens: 1
+                    key-resolver: "#{@ipKeyResolver}"
+
+            # ----------------------------------------------------------------
+            # AUTH SERVICE — rota protegida
+            # ----------------------------------------------------------------
+            - id: auth-protected
+              uri: http://${AUTH_SERVICE_HOST:auth-service}:${AUTH_SERVICE_PORT:3001}
+              predicates:
+                - Path=/auth/me
+              filters:
+                - name: JwtAuth
+
+            # ----------------------------------------------------------------
+            # CHAT SERVICE — WebSocket com ticket de uso único (C-2)
+            # Fluxo: GET /ws/ticket (Bearer JWT) → {"ticket":"<uuid>"}
+            #        ws://gateway/ws/chat?ticket=<uuid>
+            # ----------------------------------------------------------------
+            - id: chat-ws
+              uri: ws://${CHAT_SERVICE_HOST:chat-service}:${CHAT_SERVICE_PORT:3002}
+              predicates:
+                - Path=/ws/**
+              filters:
+                - name: WsTicket
+
+            # ----------------------------------------------------------------
+            # CHAT SERVICE — REST
+            # ----------------------------------------------------------------
+            - id: chat-rest
+              uri: http://${CHAT_SERVICE_HOST:chat-service}:${CHAT_SERVICE_PORT:3002}
+              predicates:
+                - Path=/rooms/**
+              filters:
+                - name: JwtAuth
+
+            # ----------------------------------------------------------------
+            # PRESENCE SERVICE
+            # ----------------------------------------------------------------
+            - id: presence
+              uri: http://${PRESENCE_SERVICE_HOST:presence-service}:${PRESENCE_SERVICE_PORT:3003}
+              predicates:
+                - Path=/presence/**
+              filters:
+                - name: JwtAuth
+
+            # ----------------------------------------------------------------
+            # HISTORY SERVICE
+            # ----------------------------------------------------------------
+            - id: history
+              uri: http://${HISTORY_SERVICE_HOST:history-service}:${HISTORY_SERVICE_PORT:3004}
+              predicates:
+                - Path=/history/**
+              filters:
+                - name: JwtAuth
+
+server:
+  port: ${SERVER_PORT:8080}
+  # M-4: Nunca expor stack trace ou mensagens internas em respostas de erro
+  error:
+    include-stacktrace: never
+    include-message: never
+    include-binding-errors: never
+
+jwt:
+  secret: ${JWT_SECRET}
+  issuer: ${JWT_ISSUER:chat-multicanal}
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+
+ws:
+  ticket:
+    ttl-seconds: 30
+
+logging:
+  level:
+    org.springframework.cloud.gateway: INFO
+    com.chat.gateway: INFO
