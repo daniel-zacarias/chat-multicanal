@@ -3,6 +3,8 @@ package com.chat.authservice.services;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -18,6 +20,8 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class RefreshTokenService {
+
+    private static final Logger log = LoggerFactory.getLogger(RefreshTokenService.class);
 
     private final RefreshTokenRepository refreshTokenRepository;
 
@@ -39,7 +43,10 @@ public class RefreshTokenService {
     @Transactional
     public User validateAndRotate(String tokenValue) {
         RefreshToken token = refreshTokenRepository.findByToken(tokenValue)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid refresh token"));
+                .orElseThrow(() -> {
+                    log.warn("Refresh token not found — possible reuse after expiry");
+                    return new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid refresh token");
+                });
 
         if (token.isExpired()) {
             refreshTokenRepository.delete(token);
@@ -47,7 +54,14 @@ public class RefreshTokenService {
         }
 
         User user = token.getUser();
-        refreshTokenRepository.delete(token);
+
+        int deleted = refreshTokenRepository.deleteByTokenValue(tokenValue);
+        if (deleted == 0) {
+            log.warn("Refresh token reuse detected for userId={} — revoking all sessions", user.getId());
+            refreshTokenRepository.deleteByUser(user);
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid refresh token");
+        }
+
         return user;
     }
 
