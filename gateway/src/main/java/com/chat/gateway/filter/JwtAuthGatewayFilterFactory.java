@@ -14,8 +14,10 @@ import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
+import tools.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 @Component
 public class JwtAuthGatewayFilterFactory
@@ -24,17 +26,17 @@ public class JwtAuthGatewayFilterFactory
     private static final Logger log = LoggerFactory.getLogger(JwtAuthGatewayFilterFactory.class);
 
     private final JwtService jwtService;
+    private final ObjectMapper mapper;
 
-    public JwtAuthGatewayFilterFactory(JwtService jwtService) {
+    public JwtAuthGatewayFilterFactory(JwtService jwtService, ObjectMapper mapper) {
         super(Config.class);
         this.jwtService = jwtService;
+        this.mapper = mapper;
     }
 
     @Override
     public GatewayFilter apply(Config config) {
         return (exchange, chain) -> {
-            // WebSocket: lê token do query param ?token= (browsers não suportam
-            // headers customizados no handshake WS)
             String token = resolveToken(exchange);
 
             if (token == null) {
@@ -42,33 +44,32 @@ public class JwtAuthGatewayFilterFactory
                 return unauthorizedResponse(exchange, "Missing or malformed Authorization header");
             }
 
-            if (!jwtService.isValid(token)) {
-                log.warn("Invalid JWT for path: {}", exchange.getRequest().getURI().getPath());
-                return unauthorizedResponse(exchange, "Invalid or expired token");
-            }
+            return jwtService.isValidReactive(token)
+                    .flatMap(valid -> {
+                        if (!valid) {
+                            log.warn("Invalid JWT for path: {}", exchange.getRequest().getURI().getPath());
+                            return unauthorizedResponse(exchange, "Invalid or expired token");
+                        }
 
-            String userId = jwtService.extractUserId(token);
+                        String userId = jwtService.extractUserId(token);
 
-            // Remove X-User-Id que o cliente possa ter enviado (previne spoofing),
-            // depois injeta o valor validado para os serviços downstream
-            ServerHttpRequest mutated = exchange.getRequest().mutate()
-                    .headers(headers -> {
-                        headers.remove("X-User-Id");
-                        headers.add("X-User-Id", userId);
-                    })
-                    .build();
+                        ServerHttpRequest mutated = exchange.getRequest().mutate()
+                                .headers(headers -> {
+                                    headers.remove("X-User-Id");
+                                    headers.add("X-User-Id", userId);
+                                })
+                                .build();
 
-            return chain.filter(exchange.mutate().request(mutated).build());
+                        return chain.filter(exchange.mutate().request(mutated).build());
+                    });
         };
     }
 
     private String resolveToken(ServerWebExchange exchange) {
-        // 1. Tenta header Authorization: Bearer <token>
         String header = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
         if (header != null && header.startsWith("Bearer ")) {
             return header.substring(7);
         }
-        // 2. Fallback: query param ?token=<token> (para WebSocket)
         String queryToken = exchange.getRequest().getQueryParams().getFirst("token");
         if (queryToken != null && !queryToken.isBlank()) {
             return queryToken;
@@ -80,14 +81,18 @@ public class JwtAuthGatewayFilterFactory
         ServerHttpResponse response = exchange.getResponse();
         response.setStatusCode(HttpStatus.UNAUTHORIZED);
         response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
-        byte[] body = buildErrorJson(401, message).getBytes(StandardCharsets.UTF_8);
-        DataBuffer buffer = response.bufferFactory().wrap(body);
+        String body = buildErrorJson(401, message);
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        DataBuffer buffer = response.bufferFactory().wrap(bytes);
         return response.writeWith(Mono.just(buffer));
     }
 
-    private static String buildErrorJson(int status, String message) {
-        String escaped = message.replace("\\", "\\\\").replace("\"", "\\\"");
-        return String.format("{\"status\":%d,\"message\":\"%s\"}", status, escaped);
+    private String buildErrorJson(int status, String message) {
+        try {
+            return mapper.writeValueAsString(Map.of("status", status, "message", message));
+        } catch (Exception e) {
+            return "{\"status\":" + status + ",\"message\":\"Internal error\"}";
+        }
     }
 
     public static class Config {}

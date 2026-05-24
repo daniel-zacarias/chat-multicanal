@@ -7,7 +7,6 @@ import org.springframework.context.annotation.Primary;
 import reactor.core.publisher.Mono;
 
 import java.net.InetSocketAddress;
-import java.util.Objects;
 
 @Configuration
 public class RateLimiterConfig {
@@ -16,17 +15,11 @@ public class RateLimiterConfig {
     @Primary
     public KeyResolver ipKeyResolver() {
         return exchange -> {
-            String forwarded = exchange.getRequest().getHeaders().getFirst("X-Forwarded-For");
-            if (forwarded != null && !forwarded.isBlank()) {
-                return Mono.just(forwarded.split(",")[0].trim());
-            }
             InetSocketAddress remoteAddress = exchange.getRequest().getRemoteAddress();
-            return Mono.just(
-                    Objects.requireNonNullElse(
-                            remoteAddress != null ? remoteAddress.getAddress().getHostAddress() : null,
-                            "unknown"
-                    )
-            );
+            String ip = (remoteAddress != null)
+                    ? remoteAddress.getAddress().getHostAddress()
+                    : "unknown";
+            return Mono.just(ip);
         };
     }
 }
