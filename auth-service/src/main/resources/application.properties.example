@@ -1,0 +1,24 @@
+# Copy this file, fill in the values, and export as environment variables
+# (or use a .env file with your container orchestration tool)
+#
+# REQUIRED — app will refuse to start without these:
+#
+# Generate a secure JWT secret (must decode to >= 32 bytes):
+#   openssl rand -base64 32
+JWT_SECRET=<replace-with-output-of-openssl-rand-base64-32>
+
+DB_USERNAME=auth_user
+DB_PASSWORD=<replace-with-strong-random-password>
+
+# OPTIONAL — defaults shown:
+#
+DB_URL=jdbc:postgresql://localhost:5432/auth_db
+JWT_ISSUER=chat-multicanal
+# Access token lifetime in ms (default: 15 min)
+# jwt.expiration=900000
+# Refresh token lifetime in ms (default: 7 days)
+# jwt.refresh-expiration=604800000
+# Comma-separated list of allowed CORS origins
+CORS_ALLOWED_ORIGINS=http://localhost:3000
+# Use 'validate' in production (requires Flyway/Liquibase)
+DDL_AUTO=update
