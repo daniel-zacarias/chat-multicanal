@@ -13,6 +13,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.util.HexFormat;
 
 @Component
@@ -32,7 +33,8 @@ public class HistoryClient {
     }
 
     public Mono<Void> save(String userId, String roomId, String text) {
-        String signature = sign(userId);
+        long timestamp = Instant.now().getEpochSecond();
+        String signature = sign(userId, timestamp);
         if (signature == null) return Mono.empty();
 
         return webClient.post()
@@ -40,6 +42,7 @@ public class HistoryClient {
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("X-User-Id", userId)
                 .header("X-User-Signature", signature)
+                .header("X-Request-Timestamp", String.valueOf(timestamp))
                 .bodyValue(new SaveRequest(roomId, text))
                 .retrieve()
                 .toBodilessEntity()
@@ -49,12 +52,13 @@ public class HistoryClient {
                 .then();
     }
 
-    private String sign(String userId) {
+    private String sign(String userId, long timestamp) {
         try {
+            String payload = userId + ":" + timestamp;
             SecretKeySpec keySpec = new SecretKeySpec(signingKey.getBytes(StandardCharsets.UTF_8), HMAC_ALGORITHM);
             Mac mac = Mac.getInstance(HMAC_ALGORITHM);
             mac.init(keySpec);
-            return HexFormat.of().formatHex(mac.doFinal(userId.getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of().formatHex(mac.doFinal(payload.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException | InvalidKeyException e) {
             log.error("Failed to compute signature for history request: {}", e.getMessage());
             return null;

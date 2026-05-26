@@ -35,6 +35,12 @@
             <artifactId>spring-boot-starter-data-cassandra-reactive</artifactId>
         </dependency>
 
+        <!-- Redis Reactive: verificação de membership de sala -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis-reactive</artifactId>
+        </dependency>
+
         <!-- Validação de beans nas DTOs -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

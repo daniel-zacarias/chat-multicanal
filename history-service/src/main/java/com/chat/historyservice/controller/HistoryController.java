@@ -23,10 +23,11 @@ public class HistoryController {
     public Mono<PageResponse> getHistory(
             @PathVariable String roomId,
             @RequestParam(required = false) String before,
-            @RequestParam(defaultValue = "50") int limit) {
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestHeader("X-User-Id") String userId) {
         Instant beforeInstant = before != null ? Instant.parse(before) : null;
         int clampedLimit = Math.max(1, Math.min(100, limit));
-        return historyService.getHistory(roomId, beforeInstant, clampedLimit);
+        return historyService.getHistory(userId, roomId, beforeInstant, clampedLimit);
     }
 
     @PostMapping("/messages")

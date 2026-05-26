@@ -24,6 +24,9 @@ management:
     web:
       exposure:
         include: health
+  endpoint:
+    health:
+      show-details: never
 
 internal:
   signing-key: ${INTERNAL_SIGNING_KEY}

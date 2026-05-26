@@ -55,14 +55,16 @@ public class JwtAuthGatewayFilterFactory
                         }
 
                         String userId = jwtService.extractUserId(token);
-                        String signature = signer.sign(userId);
+                        var token2 = signer.sign(userId);
 
                         ServerHttpRequest mutated = exchange.getRequest().mutate()
                                 .headers(headers -> {
                                     headers.remove("X-User-Id");
                                     headers.add("X-User-Id", userId);
                                     headers.remove("X-User-Signature");
-                                    headers.add("X-User-Signature", signature);
+                                    headers.add("X-User-Signature", token2.signature());
+                                    headers.remove("X-Request-Timestamp");
+                                    headers.add("X-Request-Timestamp", token2.timestamp());
                                 })
                                 .build();
 

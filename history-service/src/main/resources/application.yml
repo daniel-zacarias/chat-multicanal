@@ -2,11 +2,20 @@ spring:
   application:
     name: history-service
 
+  data:
+    redis:
+      host: ${SPRING_REDIS_HOST:redis}
+      port: ${SPRING_REDIS_PORT:6379}
+      password: ${SPRING_REDIS_PASSWORD:}
+      timeout: 2000ms
+
   cassandra:
     keyspace-name: ${CASSANDRA_KEYSPACE:chat}
     contact-points: ${CASSANDRA_HOST:cassandra}
     port: ${CASSANDRA_PORT:9042}
     local-datacenter: ${CASSANDRA_DC:datacenter1}
+    username: ${CASSANDRA_USER}
+    password: ${CASSANDRA_PASSWORD}
     schema-action: create-if-not-exists
     request:
       timeout: 10s

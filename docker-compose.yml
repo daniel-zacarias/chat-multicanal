@@ -24,6 +24,8 @@ services:
       CASSANDRA_CLUSTER_NAME: chat-cluster
       CASSANDRA_DC: datacenter1
       CASSANDRA_RACK: rack1
+      CASSANDRA_USER: ${CASSANDRA_USER}
+      CASSANDRA_PASSWORD: ${CASSANDRA_PASSWORD}
     healthcheck:
       test: ["CMD-SHELL", "nodetool status 2>&1 | grep -q UN"]
       interval: 10s
@@ -37,13 +39,14 @@ services:
 
   cassandra-init:
     image: cassandra:5
-    command: >
-      bash -c "
-      until cqlsh cassandra -e 'describe keyspaces' > /dev/null 2>&1; do
-        echo 'Waiting for cqlsh...'
-        sleep 3
-      done &&
-      cqlsh cassandra -e \"CREATE KEYSPACE IF NOT EXISTS chat WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};\""
+    volumes:
+      - ./cassandra/init.sh:/init.sh:ro
+    command: bash /init.sh
+    environment:
+      CASSANDRA_HOST: cassandra
+      CASSANDRA_USER: ${CASSANDRA_USER}
+      CASSANDRA_PASSWORD: ${CASSANDRA_PASSWORD}
+      CASSANDRA_KEYSPACE: chat
     depends_on:
       cassandra:
         condition: service_healthy
@@ -173,10 +176,17 @@ services:
       CASSANDRA_PORT: 9042
       CASSANDRA_KEYSPACE: chat
       CASSANDRA_DC: datacenter1
+      CASSANDRA_USER: ${CASSANDRA_USER}
+      CASSANDRA_PASSWORD: ${CASSANDRA_PASSWORD}
       INTERNAL_SIGNING_KEY: ${INTERNAL_SIGNING_KEY}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
     depends_on:
       cassandra-init:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     networks:
       - chat-network
     healthcheck:
