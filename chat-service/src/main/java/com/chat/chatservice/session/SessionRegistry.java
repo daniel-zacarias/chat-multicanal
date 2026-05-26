@@ -7,23 +7,27 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Mantém o estado em memória das sessões WebSocket ativas.
- *
- * sinks:           userId → canal de saída para a sessão WebSocket do usuário
- * roomSubscribers: roomId → conjunto de userIds com sessão ativa nessa sala
- *
- * Redis é a fonte de verdade para membros de salas (quem fez JOIN via REST).
- * Esta classe rastreia apenas quem está conectado via WebSocket agora.
- */
 @Component
 public class SessionRegistry {
+
+    static final int MAX_TOTAL_SESSIONS = 10_000;
 
     private final Map<String, Sinks.Many<String>> sinks = new ConcurrentHashMap<>();
     private final Map<String, Set<String>> roomSubscribers = new ConcurrentHashMap<>();
 
-    public void register(String userId, Sinks.Many<String> sink) {
-        sinks.put(userId, sink);
+    /**
+     * Returns false if the server is at capacity and the userId has no existing session.
+     * Closes any previous session for the same userId before registering the new one.
+     */
+    public boolean register(String userId, Sinks.Many<String> sink) {
+        if (!sinks.containsKey(userId) && sinks.size() >= MAX_TOTAL_SESSIONS) {
+            return false;
+        }
+        Sinks.Many<String> previous = sinks.put(userId, sink);
+        if (previous != null) {
+            previous.tryEmitComplete();
+        }
+        return true;
     }
 
     public void unregister(String userId) {

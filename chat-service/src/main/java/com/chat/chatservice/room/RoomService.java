@@ -49,8 +49,9 @@ public class RoomService {
         return redis.opsForSet().isMember("room:" + roomId + ":members", userId);
     }
 
-    public Flux<RoomResponse> getAllRooms() {
+    public Flux<RoomResponse> getRoomsForMember(String userId) {
         return redis.opsForSet().members(ROOMS_INDEX)
+                .filterWhen(roomId -> redis.opsForSet().isMember("room:" + roomId + ":members", userId))
                 .flatMap(roomId ->
                         redis.<String, String>opsForHash()
                                 .entries("room:" + roomId)
