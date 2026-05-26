@@ -1,5 +1,6 @@
 package com.chat.chatservice.websocket;
 
+import com.chat.chatservice.history.HistoryClient;
 import com.chat.chatservice.messaging.RedisMessagePublisher;
 import com.chat.chatservice.model.IncomingMessage;
 import com.chat.chatservice.room.RoomService;
@@ -31,15 +32,18 @@ public class ChatWebSocketHandler implements WebSocketHandler {
     private final SessionRegistry registry;
     private final RoomService roomService;
     private final RedisMessagePublisher publisher;
+    private final HistoryClient historyClient;
     private final ObjectMapper mapper;
 
     public ChatWebSocketHandler(SessionRegistry registry,
                                  RoomService roomService,
                                  RedisMessagePublisher publisher,
+                                 HistoryClient historyClient,
                                  ObjectMapper mapper) {
         this.registry = registry;
         this.roomService = roomService;
         this.publisher = publisher;
+        this.historyClient = historyClient;
         this.mapper = mapper;
     }
 
@@ -122,6 +126,9 @@ public class ChatWebSocketHandler implements WebSocketHandler {
             return Mono.empty();
         }
 
-        return publisher.publish(roomId, userId, text);
+        return Mono.when(
+                publisher.publish(roomId, userId, text),
+                historyClient.save(userId, roomId, text)
+        );
     }
 }

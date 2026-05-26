@@ -25,6 +25,10 @@ management:
 internal:
   signing-key: ${INTERNAL_SIGNING_KEY}
 
+services:
+  history:
+    url: ${HISTORY_SERVICE_URL:http://localhost:3004}
+
 logging:
   level:
     com.chat.chatservice: INFO
