@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: history-service
+
+  cassandra:
+    keyspace-name: ${CASSANDRA_KEYSPACE:chat}
+    contact-points: ${CASSANDRA_HOST:cassandra}
+    port: ${CASSANDRA_PORT:9042}
+    local-datacenter: ${CASSANDRA_DC:datacenter1}
+    schema-action: create-if-not-exists
+    request:
+      timeout: 10s
+
+server:
+  port: ${SERVER_PORT:3004}
+  error:
+    include-stacktrace: never
+    include-message: never
+    include-binding-errors: never
+
+internal:
+  signing-key: ${INTERNAL_SIGNING_KEY}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
