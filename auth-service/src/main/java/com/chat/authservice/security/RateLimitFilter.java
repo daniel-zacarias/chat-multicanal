@@ -63,12 +63,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     private String resolveClientIp(HttpServletRequest request) {
-        // X-Forwarded-For can be spoofed by clients; trust it only if a
-        // reverse proxy is guaranteed in front of this service.
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
+        // Always use the direct TCP peer address — the gateway is the only
+        // caller on the internal network, so X-Forwarded-For cannot be trusted
+        // here (a client could spoof it to bypass rate limiting).
         return request.getRemoteAddr();
     }
 }
