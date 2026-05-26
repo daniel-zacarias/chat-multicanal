@@ -36,7 +36,14 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     volumes:
       - redis-data:/data
     networks:
@@ -59,11 +66,12 @@ services:
       CORS_ALLOWED_ORIGINS: "http://gateway:8080"
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
     depends_on:
       auth-db:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     networks:
       - chat-network
     healthcheck:
@@ -87,9 +95,11 @@ services:
     environment:
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      INTERNAL_SIGNING_KEY: ${INTERNAL_SIGNING_KEY}
     depends_on:
       redis:
-        condition: service_started
+        condition: service_healthy
     networks:
       - chat-network
     healthcheck:
@@ -97,6 +107,34 @@ services:
         [
           "CMD-SHELL",
           "wget -qO- http://localhost:3002/actuator/health 2>/dev/null || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # ----------------------------------------------------------------
+  # PRESENCE SERVICE
+  # ----------------------------------------------------------------
+  presence-service:
+    build:
+      context: ./presence-service
+      dockerfile: Dockerfile
+    environment:
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      INTERNAL_SIGNING_KEY: ${INTERNAL_SIGNING_KEY}
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - chat-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://localhost:3003/actuator/health 2>/dev/null || exit 1",
         ]
       interval: 10s
       timeout: 5s
@@ -118,6 +156,8 @@ services:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      INTERNAL_SIGNING_KEY: ${INTERNAL_SIGNING_KEY}
       AUTH_SERVICE_HOST: auth-service
       AUTH_SERVICE_PORT: 3001
       CHAT_SERVICE_HOST: chat-service
@@ -131,8 +171,10 @@ services:
         condition: service_healthy
       chat-service:
         condition: service_healthy
+      presence-service:
+        condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     networks:
       - chat-network
 
