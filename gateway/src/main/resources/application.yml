@@ -6,6 +6,7 @@ spring:
     redis:
       host: ${SPRING_REDIS_HOST:redis}
       port: ${SPRING_REDIS_PORT:6379}
+      password: ${SPRING_REDIS_PASSWORD:}
       timeout: 2000ms
 
   cloud:
@@ -24,9 +25,6 @@ spring:
           # H-2: Apenas proxies dentro da rede Docker interna são confiáveis para X-Forwarded-*
           # Em produção, substituir pelo CIDR do load-balancer.
           trusted-proxies: "172.16.0.0/12"
-
-          default-filters:
-            - RemoveRequestHeader=X-User-Id
 
           routes:
 
@@ -108,6 +106,9 @@ server:
 jwt:
   secret: ${JWT_SECRET}
   issuer: ${JWT_ISSUER:chat-multicanal}
+
+internal:
+  signing-key: ${INTERNAL_SIGNING_KEY}
 
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}

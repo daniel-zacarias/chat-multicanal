@@ -1,5 +1,6 @@
 package com.chat.gateway.filter;
 
+import com.chat.gateway.service.InternalRequestSigner;
 import com.chat.gateway.service.WsTicketService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,11 +26,13 @@ public class WsTicketGatewayFilterFactory
     private static final Logger log = LoggerFactory.getLogger(WsTicketGatewayFilterFactory.class);
 
     private final WsTicketService wsTicketService;
+    private final InternalRequestSigner signer;
     private final ObjectMapper mapper;
 
-    public WsTicketGatewayFilterFactory(WsTicketService wsTicketService, ObjectMapper mapper) {
+    public WsTicketGatewayFilterFactory(WsTicketService wsTicketService, InternalRequestSigner signer, ObjectMapper mapper) {
         super(Config.class);
         this.wsTicketService = wsTicketService;
+        this.signer = signer;
         this.mapper = mapper;
     }
 
@@ -45,10 +48,13 @@ public class WsTicketGatewayFilterFactory
 
             return wsTicketService.consumeTicket(ticket)
                     .flatMap(userId -> {
+                        String signature = signer.sign(userId);
                         ServerHttpRequest mutated = exchange.getRequest().mutate()
                                 .headers(h -> {
                                     h.remove("X-User-Id");
                                     h.add("X-User-Id", userId);
+                                    h.remove("X-User-Signature");
+                                    h.add("X-User-Signature", signature);
                                 })
                                 .build();
                         // thenReturn prevents switchIfEmpty from firing when chain.filter()
