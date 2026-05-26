@@ -64,11 +64,11 @@ public class JwtService {
             Claims claims = parseClaims(token);
             String jti = claims.getId();
             if (jti == null) {
-                return Mono.just(true);
+                return Mono.just(false);
             }
             return redisTemplate.hasKey("jwt:blocked:" + jti)
                     .map(blocked -> !blocked)
-                    .onErrorReturn(true);
+                    .onErrorReturn(false);
         } catch (JwtException | IllegalArgumentException e) {
             return Mono.just(false);
         }

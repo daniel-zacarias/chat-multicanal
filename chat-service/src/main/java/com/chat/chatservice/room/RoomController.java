@@ -20,8 +20,8 @@ public class RoomController {
     }
 
     @GetMapping
-    public Flux<RoomResponse> listRooms() {
-        return roomService.getAllRooms();
+    public Flux<RoomResponse> listRooms(@RequestHeader("X-User-Id") String userId) {
+        return roomService.getRoomsForMember(userId);
     }
 
     @PostMapping

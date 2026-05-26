@@ -1,6 +1,6 @@
 spring:
   application:
-    name: chat-service
+    name: presence-service
 
   data:
     redis:
@@ -10,11 +10,14 @@ spring:
       timeout: 2000ms
 
 server:
-  port: ${SERVER_PORT:3002}
+  port: ${SERVER_PORT:3003}
   error:
     include-stacktrace: never
     include-message: never
     include-binding-errors: never
+
+presence:
+  ttl-seconds: ${PRESENCE_TTL_SECONDS:60}
 
 management:
   endpoints:
@@ -27,4 +30,4 @@ internal:
 
 logging:
   level:
-    com.chat.chatservice: INFO
+    com.chat.presenceservice: INFO

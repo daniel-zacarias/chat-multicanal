@@ -163,20 +163,22 @@ class RateLimitFilterTest {
     }
 
     @Nested
-    @DisplayName("X-Forwarded-For header")
+    @DisplayName("X-Forwarded-For header is ignored")
     class XForwardedFor {
 
         @Test
-        @DisplayName("uses the first value of X-Forwarded-For as the client IP")
-        void usesFirstForwardedIp() throws Exception {
+        @DisplayName("XFF header does not affect rate limiting — remoteAddr is always used")
+        void xffIsIgnoredAndRemoteAddrIsUsed() throws Exception {
+            // Exhaust the bucket for remoteAddr "10.0.0.99"
             for (int i = 0; i < 10; i++) {
                 MockHttpServletRequest req = postRequest("/auth/login", "10.0.0.99");
-                req.addHeader("X-Forwarded-For", "203.0.113.1, 10.0.0.99");
+                req.addHeader("X-Forwarded-For", "203.0.113.1");
                 filter.doFilterInternal(req, new MockHttpServletResponse(), new MockFilterChain());
             }
 
+            // 11th request from the same remoteAddr must be rate-limited even with a different XFF
             MockHttpServletRequest req = postRequest("/auth/login", "10.0.0.99");
-            req.addHeader("X-Forwarded-For", "203.0.113.1, 10.0.0.99");
+            req.addHeader("X-Forwarded-For", "1.2.3.4");
             MockHttpServletResponse res = new MockHttpServletResponse();
             filter.doFilterInternal(req, res, new MockFilterChain());
 
@@ -184,22 +186,24 @@ class RateLimitFilterTest {
         }
 
         @Test
-        @DisplayName("different forwarded IPs have independent buckets")
-        void differentForwardedIpsHaveIndependentBuckets() throws Exception {
+        @DisplayName("different XFF values with same remoteAddr share the same bucket")
+        void differentXffValuesSameRemoteAddrShareBucket() throws Exception {
+            // Exhaust bucket via requests with XFF "203.0.113.10"
             for (int i = 0; i < 10; i++) {
                 MockHttpServletRequest req = postRequest("/auth/login", "10.0.0.50");
                 req.addHeader("X-Forwarded-For", "203.0.113.10");
                 filter.doFilterInternal(req, new MockHttpServletResponse(), new MockFilterChain());
             }
 
+            // Request with a different XFF but same remoteAddr must be rate-limited
             MockHttpServletRequest req = postRequest("/auth/login", "10.0.0.50");
             req.addHeader("X-Forwarded-For", "203.0.113.20");
             MockHttpServletResponse res = new MockHttpServletResponse();
             MockFilterChain chain       = new MockFilterChain();
             filter.doFilterInternal(req, res, chain);
 
-            assertThat(res.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
-            assertThat(chain.getRequest()).isNotNull();
+            assertThat(res.getStatus()).isEqualTo(429);
+            assertThat(chain.getRequest()).isNull();
         }
     }
 }

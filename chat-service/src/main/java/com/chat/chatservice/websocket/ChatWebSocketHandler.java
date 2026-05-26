@@ -52,7 +52,10 @@ public class ChatWebSocketHandler implements WebSocketHandler {
         }
 
         Sinks.Many<String> outbound = Sinks.many().multicast().onBackpressureBuffer(MAX_OUTBOUND_BUFFER, false);
-        registry.register(userId, outbound);
+        if (!registry.register(userId, outbound)) {
+            log.warn("WebSocket rejected: server at session capacity [userId={}, sessionId={}]", userId, session.getId());
+            return session.close(CloseStatus.SERVICE_OVERLOAD);
+        }
 
         log.info("WebSocket session opened [userId={}, sessionId={}]", userId, session.getId());
 

@@ -101,13 +101,15 @@ class GlobalExceptionHandlerTest {
         }
 
         @Test
-        @DisplayName("concatenates all field errors in the message")
-        void concatenatesFieldErrors() {
+        @DisplayName("includes field names but does not expose validation constraint messages")
+        void includesFieldNamesWithoutConstraintMessages() {
             MethodArgumentNotValidException ex = buildValidationException("email", "must be a valid email");
 
             ResponseEntity<ErrorResponse> response = handler.handleValidation(ex);
 
-            assertThat(response.getBody().message()).contains("email").contains("must be a valid email");
+            assertThat(response.getBody().message())
+                    .contains("email")
+                    .doesNotContain("must be a valid email");
         }
 
         private MethodArgumentNotValidException buildValidationException(String field, String message) {

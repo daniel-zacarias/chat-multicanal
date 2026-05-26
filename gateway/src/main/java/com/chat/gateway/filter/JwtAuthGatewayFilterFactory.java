@@ -1,6 +1,7 @@
 package com.chat.gateway.filter;
 
 import com.chat.gateway.security.JwtService;
+import com.chat.gateway.service.InternalRequestSigner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
@@ -26,11 +27,13 @@ public class JwtAuthGatewayFilterFactory
     private static final Logger log = LoggerFactory.getLogger(JwtAuthGatewayFilterFactory.class);
 
     private final JwtService jwtService;
+    private final InternalRequestSigner signer;
     private final ObjectMapper mapper;
 
-    public JwtAuthGatewayFilterFactory(JwtService jwtService, ObjectMapper mapper) {
+    public JwtAuthGatewayFilterFactory(JwtService jwtService, InternalRequestSigner signer, ObjectMapper mapper) {
         super(Config.class);
         this.jwtService = jwtService;
+        this.signer = signer;
         this.mapper = mapper;
     }
 
@@ -52,11 +55,14 @@ public class JwtAuthGatewayFilterFactory
                         }
 
                         String userId = jwtService.extractUserId(token);
+                        String signature = signer.sign(userId);
 
                         ServerHttpRequest mutated = exchange.getRequest().mutate()
                                 .headers(headers -> {
                                     headers.remove("X-User-Id");
                                     headers.add("X-User-Id", userId);
+                                    headers.remove("X-User-Signature");
+                                    headers.add("X-User-Signature", signature);
                                 })
                                 .build();
 
@@ -69,10 +75,6 @@ public class JwtAuthGatewayFilterFactory
         String header = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
         if (header != null && header.startsWith("Bearer ")) {
             return header.substring(7);
-        }
-        String queryToken = exchange.getRequest().getQueryParams().getFirst("token");
-        if (queryToken != null && !queryToken.isBlank()) {
-            return queryToken;
         }
         return null;
     }
