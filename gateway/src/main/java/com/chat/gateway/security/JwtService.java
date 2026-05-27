@@ -50,15 +50,6 @@ public class JwtService {
         return parseClaims(token).getId();
     }
 
-    public boolean isValid(String token) {
-        try {
-            parseClaims(token);
-            return true;
-        } catch (JwtException | IllegalArgumentException e) {
-            return false;
-        }
-    }
-
     public Mono<Boolean> isValidReactive(String token) {
         try {
             Claims claims = parseClaims(token);

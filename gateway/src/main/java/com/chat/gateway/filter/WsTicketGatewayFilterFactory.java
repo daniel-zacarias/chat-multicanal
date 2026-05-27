@@ -48,13 +48,15 @@ public class WsTicketGatewayFilterFactory
 
             return wsTicketService.consumeTicket(ticket)
                     .flatMap(userId -> {
-                        String signature = signer.sign(userId);
+                        var internalToken = signer.sign(userId);
                         ServerHttpRequest mutated = exchange.getRequest().mutate()
                                 .headers(h -> {
                                     h.remove("X-User-Id");
                                     h.add("X-User-Id", userId);
                                     h.remove("X-User-Signature");
-                                    h.add("X-User-Signature", signature);
+                                    h.add("X-User-Signature", internalToken.signature());
+                                    h.remove("X-Request-Timestamp");
+                                    h.add("X-Request-Timestamp", internalToken.timestamp());
                                 })
                                 .build();
                         // thenReturn prevents switchIfEmpty from firing when chain.filter()

@@ -18,21 +18,41 @@ services:
     networks:
       - chat-network
 
-  history-db:
-    image: postgres:16-alpine
+  cassandra:
+    image: cassandra:5
     environment:
-      POSTGRES_DB: history_db
-      POSTGRES_USER: history_user
-      POSTGRES_PASSWORD: ${DB_HISTORY_PASSWORD}
+      CASSANDRA_CLUSTER_NAME: chat-cluster
+      CASSANDRA_DC: datacenter1
+      CASSANDRA_RACK: rack1
+      CASSANDRA_USER: ${CASSANDRA_USER}
+      CASSANDRA_PASSWORD: ${CASSANDRA_PASSWORD}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U history_user -d history_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      test: ["CMD-SHELL", "nodetool status 2>&1 | grep -q UN"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 90s
     volumes:
-      - history-postgres-data:/var/lib/postgresql/data
+      - cassandra-data:/var/lib/cassandra
     networks:
       - chat-network
+
+  cassandra-init:
+    image: cassandra:5
+    volumes:
+      - ./cassandra/init.sh:/init.sh:ro
+    command: bash /init.sh
+    environment:
+      CASSANDRA_HOST: cassandra
+      CASSANDRA_USER: ${CASSANDRA_USER}
+      CASSANDRA_PASSWORD: ${CASSANDRA_PASSWORD}
+      CASSANDRA_KEYSPACE: chat
+    depends_on:
+      cassandra:
+        condition: service_healthy
+    networks:
+      - chat-network
+    restart: "no"
 
   redis:
     image: redis:7-alpine
@@ -97,8 +117,11 @@ services:
       SPRING_REDIS_PORT: 6379
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
       INTERNAL_SIGNING_KEY: ${INTERNAL_SIGNING_KEY}
+      HISTORY_SERVICE_URL: http://history-service:3004
     depends_on:
       redis:
+        condition: service_healthy
+      history-service:
         condition: service_healthy
     networks:
       - chat-network
@@ -142,6 +165,42 @@ services:
       start_period: 40s
 
   # ----------------------------------------------------------------
+  # HISTORY SERVICE
+  # ----------------------------------------------------------------
+  history-service:
+    build:
+      context: ./history-service
+      dockerfile: Dockerfile
+    environment:
+      CASSANDRA_HOST: cassandra
+      CASSANDRA_PORT: 9042
+      CASSANDRA_KEYSPACE: chat
+      CASSANDRA_DC: datacenter1
+      CASSANDRA_USER: ${CASSANDRA_USER}
+      CASSANDRA_PASSWORD: ${CASSANDRA_PASSWORD}
+      INTERNAL_SIGNING_KEY: ${INTERNAL_SIGNING_KEY}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
+    depends_on:
+      cassandra-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    networks:
+      - chat-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://localhost:3004/actuator/health 2>/dev/null || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # ----------------------------------------------------------------
   # GATEWAY
   # ----------------------------------------------------------------
   gateway:
@@ -173,6 +232,8 @@ services:
         condition: service_healthy
       presence-service:
         condition: service_healthy
+      history-service:
+        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
@@ -180,7 +241,7 @@ services:
 
 volumes:
   auth-postgres-data:
-  history-postgres-data:
+  cassandra-data:
   redis-data:
 
 networks:

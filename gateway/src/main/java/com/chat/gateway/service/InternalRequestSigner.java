@@ -9,6 +9,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.util.HexFormat;
 
 @Service
@@ -26,12 +27,17 @@ public class InternalRequestSigner {
         }
     }
 
-    public String sign(String userId) {
+    public record InternalToken(String signature, String timestamp) {}
+
+    public InternalToken sign(String userId) {
+        long ts = Instant.now().getEpochSecond();
         try {
+            String payload = userId + ":" + ts;
             SecretKeySpec keySpec = new SecretKeySpec(signingKey.getBytes(StandardCharsets.UTF_8), HMAC_ALGORITHM);
             Mac mac = Mac.getInstance(HMAC_ALGORITHM);
             mac.init(keySpec);
-            return HexFormat.of().formatHex(mac.doFinal(userId.getBytes(StandardCharsets.UTF_8)));
+            String signature = HexFormat.of().formatHex(mac.doFinal(payload.getBytes(StandardCharsets.UTF_8)));
+            return new InternalToken(signature, String.valueOf(ts));
         } catch (NoSuchAlgorithmException | InvalidKeyException e) {
             throw new IllegalStateException("Failed to sign internal request header", e);
         }

@@ -1,4 +1,4 @@
-package com.chat.presenceservice.security;
+package com.chat.historyservice.security;
 
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
