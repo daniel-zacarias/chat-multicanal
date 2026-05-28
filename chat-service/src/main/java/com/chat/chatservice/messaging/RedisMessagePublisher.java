@@ -25,9 +25,9 @@ public class RedisMessagePublisher {
         this.mapper = mapper;
     }
 
-    public Mono<Void> publish(String roomId, String fromUserId, String text) {
+    public Mono<Void> publish(String roomId, String fromUserId, String fromUsername, String text) {
         OutgoingMessage msg = new OutgoingMessage(
-                "message", fromUserId, roomId, text, Instant.now().toString()
+                "message", fromUserId, fromUsername, roomId, text, Instant.now().toString()
         );
         String json;
         try {

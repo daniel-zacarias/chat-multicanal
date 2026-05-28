@@ -55,13 +55,17 @@ public class ChatWebSocketHandler implements WebSocketHandler {
             return session.close(CloseStatus.POLICY_VIOLATION);
         }
 
+        String rawUsername = session.getHandshakeInfo().getHeaders().getFirst("X-User-Name");
+        String username = (rawUsername != null && !rawUsername.isBlank()) ? rawUsername : userId;
+
         Sinks.Many<String> outbound = Sinks.many().multicast().onBackpressureBuffer(MAX_OUTBOUND_BUFFER, false);
         if (!registry.register(userId, outbound)) {
             log.warn("WebSocket rejected: server at session capacity [userId={}, sessionId={}]", userId, session.getId());
             return session.close(CloseStatus.SERVICE_OVERLOAD);
         }
 
-        log.info("WebSocket session opened [userId={}, sessionId={}]", userId, session.getId());
+        registry.storeUsername(userId, username);
+        log.info("WebSocket session opened [userId={}, username={}, sessionId={}]", userId, username, session.getId());
 
         Mono<Void> send = session.send(
                 outbound.asFlux().map(session::textMessage)
@@ -126,9 +130,10 @@ public class ChatWebSocketHandler implements WebSocketHandler {
             return Mono.empty();
         }
 
+        String username = registry.getUsername(userId);
         return Mono.when(
-                publisher.publish(roomId, userId, text),
-                historyClient.save(userId, roomId, text)
+                publisher.publish(roomId, userId, username, text),
+                historyClient.save(userId, username, roomId, text)
         );
     }
 }

@@ -34,7 +34,9 @@ public class HistoryController {
     @ResponseStatus(HttpStatus.CREATED)
     public Mono<MessageResponse> saveMessage(
             @RequestHeader("X-User-Id") String userId,
+            @RequestHeader(value = "X-User-Name", required = false) String username,
             @RequestBody @Valid MessageRequest request) {
-        return historyService.saveMessage(userId, request);
+        String resolvedUsername = (username != null && !username.isBlank()) ? username : userId;
+        return historyService.saveMessage(userId, resolvedUsername, request);
     }
 }

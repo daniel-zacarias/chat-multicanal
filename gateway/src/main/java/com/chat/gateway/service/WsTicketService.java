@@ -22,15 +22,23 @@ public class WsTicketService {
         this.redisTemplate = redisTemplate;
     }
 
-    public Mono<String> createTicket(String userId) {
+    public record TicketData(String userId, String username) {}
+
+    public Mono<String> createTicket(String userId, String username) {
         String ticket = UUID.randomUUID().toString();
+        String stored = userId + ":" + (username != null ? username : userId);
         return redisTemplate.opsForValue()
-                .set(TICKET_PREFIX + ticket, userId, Duration.ofSeconds(ticketTtlSeconds))
+                .set(TICKET_PREFIX + ticket, stored, Duration.ofSeconds(ticketTtlSeconds))
                 .thenReturn(ticket);
     }
 
     // GETDEL: atomicamente lê e deleta — garante uso único do ticket
-    public Mono<String> consumeTicket(String ticket) {
-        return redisTemplate.opsForValue().getAndDelete(TICKET_PREFIX + ticket);
+    public Mono<TicketData> consumeTicket(String ticket) {
+        return redisTemplate.opsForValue().getAndDelete(TICKET_PREFIX + ticket)
+                .map(value -> {
+                    int idx = value.indexOf(':');
+                    if (idx < 0) return new TicketData(value, value);
+                    return new TicketData(value.substring(0, idx), value.substring(idx + 1));
+                });
     }
 }

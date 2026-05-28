@@ -1,5 +1,7 @@
 package com.chat.chatservice.room;
 
+import com.chat.chatservice.presence.PresenceClient;
+import com.chat.chatservice.room.dto.MemberResponse;
 import com.chat.chatservice.room.dto.RoomResponse;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -14,11 +16,14 @@ import java.util.UUID;
 public class RoomService {
 
     private static final String ROOMS_INDEX = "rooms";
+    private static final String USERS_NAMES_KEY = "users:names";
 
     private final ReactiveRedisTemplate<String, String> redis;
+    private final PresenceClient presenceClient;
 
-    public RoomService(ReactiveRedisTemplate<String, String> redis) {
+    public RoomService(ReactiveRedisTemplate<String, String> redis, PresenceClient presenceClient) {
         this.redis = redis;
+        this.presenceClient = presenceClient;
     }
 
     public Mono<RoomResponse> createRoom(String name, String createdBy) {
@@ -47,6 +52,19 @@ public class RoomService {
 
     public Mono<Boolean> isMember(String roomId, String userId) {
         return redis.opsForSet().isMember("room:" + roomId + ":members", userId);
+    }
+
+    public Flux<MemberResponse> getMembers(String roomId, String requestingUserId) {
+        return presenceClient.getOnlineMembers(roomId, requestingUserId)
+                .flatMapMany(onlineIds ->
+                        redis.opsForSet().members("room:" + roomId + ":members")
+                                .flatMap(memberId -> Mono.zip(
+                                        redis.<String, String>opsForHash()
+                                                .get(USERS_NAMES_KEY, memberId)
+                                                .defaultIfEmpty(memberId),
+                                        Mono.just(onlineIds.contains(memberId))
+                                ).map(t -> new MemberResponse(memberId, t.getT1(), t.getT2())))
+                );
     }
 
     public Flux<RoomResponse> getRoomsForMember(String userId) {

@@ -16,7 +16,7 @@ spring:
     local-datacenter: ${CASSANDRA_DC:datacenter1}
     username: ${CASSANDRA_USER}
     password: ${CASSANDRA_PASSWORD}
-    schema-action: create-if-not-exists
+    schema-action: recreate
     request:
       timeout: 10s
 

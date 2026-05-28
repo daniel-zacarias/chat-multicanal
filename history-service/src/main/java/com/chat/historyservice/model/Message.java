@@ -19,6 +19,9 @@ public class Message {
     @Column("user_id")
     private String userId;
 
+    @Column("username")
+    private String username;
+
     @Column("content")
     private String content;
 }

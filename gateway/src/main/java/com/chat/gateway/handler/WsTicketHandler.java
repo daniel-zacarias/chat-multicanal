@@ -48,7 +48,8 @@ public class WsTicketHandler {
                                 .<Object>body(new ErrorResponse(401, "Unauthorized")));
                     }
                     String userId = jwtService.extractUserId(token);
-                    return wsTicketService.createTicket(userId)
+                    String username = jwtService.extractUsername(token);
+                    return wsTicketService.createTicket(userId, username)
                             .map(ticket -> ResponseEntity.ok((Object) Map.of("ticket", ticket)));
                 });
     }

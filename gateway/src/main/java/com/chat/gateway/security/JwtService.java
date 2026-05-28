@@ -46,6 +46,11 @@ public class JwtService {
         return parseClaims(token).getSubject();
     }
 
+    public String extractUsername(String token) {
+        Object username = parseClaims(token).get("username");
+        return username != null ? username.toString() : null;
+    }
+
     public String extractJti(String token) {
         return parseClaims(token).getId();
     }

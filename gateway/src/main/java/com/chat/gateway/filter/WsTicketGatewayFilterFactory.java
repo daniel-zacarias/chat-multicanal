@@ -47,12 +47,14 @@ public class WsTicketGatewayFilterFactory
             }
 
             return wsTicketService.consumeTicket(ticket)
-                    .flatMap(userId -> {
-                        var internalToken = signer.sign(userId);
+                    .flatMap(data -> {
+                        var internalToken = signer.sign(data.userId());
                         ServerHttpRequest mutated = exchange.getRequest().mutate()
                                 .headers(h -> {
                                     h.remove("X-User-Id");
-                                    h.add("X-User-Id", userId);
+                                    h.add("X-User-Id", data.userId());
+                                    h.remove("X-User-Name");
+                                    h.add("X-User-Name", data.username());
                                     h.remove("X-User-Signature");
                                     h.add("X-User-Signature", internalToken.signature());
                                     h.remove("X-Request-Timestamp");
@@ -62,7 +64,7 @@ public class WsTicketGatewayFilterFactory
                         // thenReturn prevents switchIfEmpty from firing when chain.filter()
                         // completes normally as Mono<Void> (which is always "empty").
                         return chain.filter(exchange.mutate().request(mutated).build())
-                                .thenReturn(userId);
+                                .thenReturn(data.userId());
                     })
                     .switchIfEmpty(Mono.defer(() -> {
                         log.warn("Invalid or expired WS ticket: {}", ticket);

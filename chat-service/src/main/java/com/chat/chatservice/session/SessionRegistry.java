@@ -1,5 +1,6 @@
 package com.chat.chatservice.session;
 
+import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Sinks;
 
@@ -11,9 +12,16 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SessionRegistry {
 
     static final int MAX_TOTAL_SESSIONS = 10_000;
+    static final String USERS_NAMES_KEY = "users:names";
 
+    private final ReactiveRedisTemplate<String, String> redis;
     private final Map<String, Sinks.Many<String>> sinks = new ConcurrentHashMap<>();
     private final Map<String, Set<String>> roomSubscribers = new ConcurrentHashMap<>();
+    private final Map<String, String> usernames = new ConcurrentHashMap<>();
+
+    public SessionRegistry(ReactiveRedisTemplate<String, String> redis) {
+        this.redis = redis;
+    }
 
     /**
      * Returns false if the server is at capacity and the userId has no existing session.
@@ -42,6 +50,18 @@ public class SessionRegistry {
     public boolean isSubscribed(String userId, String roomId) {
         Set<String> members = roomSubscribers.get(roomId);
         return members != null && members.contains(userId);
+    }
+
+    public void storeUsername(String userId, String username) {
+        if (username == null || username.isBlank()) return;
+        usernames.put(userId, username);
+        redis.<String, String>opsForHash()
+                .put(USERS_NAMES_KEY, userId, username)
+                .subscribe();
+    }
+
+    public String getUsername(String userId) {
+        return usernames.getOrDefault(userId, userId);
     }
 
     public void broadcast(String roomId, String message) {

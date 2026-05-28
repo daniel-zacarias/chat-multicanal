@@ -20,12 +20,11 @@ services:
 
   cassandra:
     image: cassandra:5
+    entrypoint: ["/cassandra-entrypoint.sh", "cassandra", "-f"]
     environment:
       CASSANDRA_CLUSTER_NAME: chat-cluster
       CASSANDRA_DC: datacenter1
       CASSANDRA_RACK: rack1
-      CASSANDRA_USER: ${CASSANDRA_USER}
-      CASSANDRA_PASSWORD: ${CASSANDRA_PASSWORD}
     healthcheck:
       test: ["CMD-SHELL", "nodetool status 2>&1 | grep -q UN"]
       interval: 10s
@@ -34,6 +33,7 @@ services:
       start_period: 90s
     volumes:
       - cassandra-data:/var/lib/cassandra
+      - ./cassandra/cassandra-entrypoint.sh:/cassandra-entrypoint.sh:ro
     networks:
       - chat-network
 
@@ -118,10 +118,13 @@ services:
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
       INTERNAL_SIGNING_KEY: ${INTERNAL_SIGNING_KEY}
       HISTORY_SERVICE_URL: http://history-service:3004
+      PRESENCE_SERVICE_URL: http://presence-service:3003
     depends_on:
       redis:
         condition: service_healthy
       history-service:
+        condition: service_healthy
+      presence-service:
         condition: service_healthy
     networks:
       - chat-network

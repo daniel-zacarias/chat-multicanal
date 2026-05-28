@@ -162,7 +162,7 @@ class HistoryServiceTest {
         UUID id = UUID.randomUUID();
         Instant ts = Instant.parse("2025-06-01T08:00:00Z");
         MessageKey key = new MessageKey("room-1", ts, id);
-        Message msg = new Message(key, "user-Z", "hello");
+        Message msg = new Message(key, "user-Z", "userz", "hello");
 
         when(setOps.isMember("room:room-1:members", "user-Z")).thenReturn(Mono.just(true));
         when(messageRepository.findLatestByRoomId("room-1", 1)).thenReturn(Flux.just(msg));
@@ -173,6 +173,7 @@ class HistoryServiceTest {
                     assertThat(r.messageId()).isEqualTo(id.toString());
                     assertThat(r.roomId()).isEqualTo("room-1");
                     assertThat(r.userId()).isEqualTo("user-Z");
+                    assertThat(r.username()).isEqualTo("userz");
                     assertThat(r.content()).isEqualTo("hello");
                     assertThat(r.createdAt()).isEqualTo(ts);
                 })
@@ -186,12 +187,13 @@ class HistoryServiceTest {
         ArgumentCaptor<Message> captor = ArgumentCaptor.forClass(Message.class);
         MessageRequest request = new MessageRequest("room-99", "test content");
 
-        Message saved = buildMessage("room-99", Instant.now(), "user-5", "test content");
+        Message saved = buildMessage("room-99", Instant.now(), "user-5", "alice", "test content");
         when(messageRepository.save(captor.capture())).thenReturn(Mono.just(saved));
 
-        StepVerifier.create(historyService.saveMessage("user-5", request))
+        StepVerifier.create(historyService.saveMessage("user-5", "alice", request))
                 .assertNext(response -> {
                     assertThat(response.userId()).isEqualTo("user-5");
+                    assertThat(response.username()).isEqualTo("alice");
                     assertThat(response.content()).isEqualTo("test content");
                     assertThat(response.roomId()).isEqualTo("room-99");
                 })
@@ -199,6 +201,7 @@ class HistoryServiceTest {
 
         Message persisted = captor.getValue();
         assertThat(persisted.getUserId()).isEqualTo("user-5");
+        assertThat(persisted.getUsername()).isEqualTo("alice");
         assertThat(persisted.getContent()).isEqualTo("test content");
         assertThat(persisted.getKey().getRoomId()).isEqualTo("room-99");
         assertThat(persisted.getKey().getMessageId()).isNotNull();
@@ -212,10 +215,10 @@ class HistoryServiceTest {
         when(messageRepository.save(any(Message.class)))
                 .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
-        UUID id1 = historyService.saveMessage("user-1", request)
+        UUID id1 = historyService.saveMessage("user-1", "bob", request)
                 .map(r -> UUID.fromString(r.messageId()))
                 .block();
-        UUID id2 = historyService.saveMessage("user-1", request)
+        UUID id2 = historyService.saveMessage("user-1", "bob", request)
                 .map(r -> UUID.fromString(r.messageId()))
                 .block();
 
@@ -227,11 +230,11 @@ class HistoryServiceTest {
         UUID fixedId = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
         Instant fixedTs = Instant.parse("2025-09-01T00:00:00Z");
         MessageKey key = new MessageKey("room-7", fixedTs, fixedId);
-        Message saved = new Message(key, "user-3", "mapped content");
+        Message saved = new Message(key, "user-3", "carol", "mapped content");
 
         when(messageRepository.save(any(Message.class))).thenReturn(Mono.just(saved));
 
-        StepVerifier.create(historyService.saveMessage("user-3", new MessageRequest("room-7", "mapped content")))
+        StepVerifier.create(historyService.saveMessage("user-3", "carol", new MessageRequest("room-7", "mapped content")))
                 .assertNext(response -> {
                     assertThat(response.messageId()).isEqualTo("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
                     assertThat(response.createdAt()).isEqualTo(fixedTs);
@@ -243,6 +246,11 @@ class HistoryServiceTest {
 
     private Message buildMessage(String roomId, Instant createdAt, String userId, String content) {
         MessageKey key = new MessageKey(roomId, createdAt, UUID.randomUUID());
-        return new Message(key, userId, content);
+        return new Message(key, userId, userId, content);
+    }
+
+    private Message buildMessage(String roomId, Instant createdAt, String userId, String username, String content) {
+        MessageKey key = new MessageKey(roomId, createdAt, UUID.randomUUID());
+        return new Message(key, userId, username, content);
     }
 }

@@ -43,10 +43,11 @@ public class HistoryService {
                 });
     }
 
-    public Mono<MessageResponse> saveMessage(String userId, MessageRequest request) {
+    public Mono<MessageResponse> saveMessage(String userId, String username, MessageRequest request) {
         Message message = new Message(
                 new MessageKey(request.roomId(), Instant.now(), UUID.randomUUID()),
                 userId,
+                username,
                 request.content()
         );
         return messageRepository.save(message).map(MessageResponse::from);

@@ -21,6 +21,7 @@ public class StripInboundIdentityFilter implements WebFilter {
         ServerWebExchange sanitized = exchange.mutate()
                 .request(r -> r.headers(headers -> {
                     headers.remove("X-User-Id");
+                    headers.remove("X-User-Name");
                     headers.remove("X-User-Signature");
                     headers.remove("X-Request-Timestamp");
                 }))

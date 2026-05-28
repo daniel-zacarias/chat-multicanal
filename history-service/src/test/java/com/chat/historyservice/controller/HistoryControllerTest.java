@@ -43,7 +43,7 @@ class HistoryControllerTest {
 
     private MessageResponse sampleResponse(String roomId) {
         return new MessageResponse(
-                "msg-id-1", roomId, "user-1", "hello", Instant.parse("2025-01-01T00:00:00Z")
+                "msg-id-1", roomId, "user-1", "alice", "hello", Instant.parse("2025-01-01T00:00:00Z")
         );
     }
 
@@ -167,12 +167,13 @@ class HistoryControllerTest {
     @Test
     void saveMessage_returns201WithBody() {
         MessageResponse response = sampleResponse("room-1");
-        when(historyService.saveMessage("user-1", new MessageRequest("room-1", "hello")))
+        when(historyService.saveMessage("user-1", "alice", new MessageRequest("room-1", "hello")))
                 .thenReturn(Mono.just(response));
 
         webTestClient.post()
                 .uri("/history/messages")
                 .header("X-User-Id", "user-1")
+                .header("X-User-Name", "alice")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
                         {"roomId":"room-1","content":"hello"}
@@ -181,6 +182,7 @@ class HistoryControllerTest {
                 .expectStatus().isCreated()
                 .expectBody()
                 .jsonPath("$.userId").isEqualTo("user-1")
+                .jsonPath("$.username").isEqualTo("alice")
                 .jsonPath("$.content").isEqualTo("hello");
     }
 
@@ -225,7 +227,7 @@ class HistoryControllerTest {
     @Test
     void saveMessage_propagatesUserIdFromHeader() {
         MessageResponse response = sampleResponse("room-1");
-        when(historyService.saveMessage(eq("specific-user"), any(MessageRequest.class)))
+        when(historyService.saveMessage(eq("specific-user"), any(), any(MessageRequest.class)))
                 .thenReturn(Mono.just(response));
 
         webTestClient.post()
@@ -238,6 +240,6 @@ class HistoryControllerTest {
                 .exchange()
                 .expectStatus().isCreated();
 
-        verify(historyService).saveMessage(eq("specific-user"), any(MessageRequest.class));
+        verify(historyService).saveMessage(eq("specific-user"), any(), any(MessageRequest.class));
     }
 }
