@@ -56,7 +56,9 @@ public class JwtAuthGatewayFilterFactory
 
                         String userId = jwtService.extractUserId(token);
                         String username = jwtService.extractUsername(token);
-                        var token2 = signer.sign(userId);
+                        String method = exchange.getRequest().getMethod().name();
+                        String path = exchange.getRequest().getURI().getPath();
+                        var token2 = signer.sign(userId, username != null ? username : "", method, path);
 
                         ServerHttpRequest mutated = exchange.getRequest().mutate()
                                 .headers(headers -> {
@@ -68,6 +70,8 @@ public class JwtAuthGatewayFilterFactory
                                     headers.add("X-User-Signature", token2.signature());
                                     headers.remove("X-Request-Timestamp");
                                     headers.add("X-Request-Timestamp", token2.timestamp());
+                                    headers.remove("X-Request-Nonce");
+                                    headers.add("X-Request-Nonce", token2.nonce());
                                 })
                                 .build();
 

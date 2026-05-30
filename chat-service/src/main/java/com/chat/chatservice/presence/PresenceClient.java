@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 @Component
 public class PresenceClient {
@@ -35,7 +36,11 @@ public class PresenceClient {
 
     public Mono<Set<String>> getOnlineMembers(String roomId, String requestingUserId) {
         long timestamp = Instant.now().getEpochSecond();
-        String signature = sign(requestingUserId, timestamp);
+        String nonce = UUID.randomUUID().toString();
+        String path = "/presence/room/" + roomId;
+        // Username is not available at this call site; use empty string — the
+        // presence endpoint does not rely on display names for authorization.
+        String signature = sign(requestingUserId, "", "GET", path, timestamp, nonce);
         if (signature == null) return Mono.just(Set.of());
 
         return webClient.get()
@@ -43,6 +48,7 @@ public class PresenceClient {
                 .header("X-User-Id", requestingUserId)
                 .header("X-User-Signature", signature)
                 .header("X-Request-Timestamp", String.valueOf(timestamp))
+                .header("X-Request-Nonce", nonce)
                 .retrieve()
                 .bodyToMono(RoomPresenceResponse.class)
                 .map(response -> Set.copyOf(response.onlineUsers()))
@@ -51,9 +57,10 @@ public class PresenceClient {
                 .onErrorReturn(Set.of());
     }
 
-    private String sign(String userId, long timestamp) {
+    private String sign(String userId, String username, String method, String path,
+                        long timestamp, String nonce) {
         try {
-            String payload = userId + ":" + timestamp;
+            String payload = userId + "\n" + username + "\n" + method + "\n" + path + "\n" + timestamp + "\n" + nonce;
             SecretKeySpec keySpec = new SecretKeySpec(signingKey.getBytes(StandardCharsets.UTF_8), HMAC_ALGORITHM);
             Mac mac = Mac.getInstance(HMAC_ALGORITHM);
             mac.init(keySpec);

@@ -1,21 +1,21 @@
 package com.chat.authservice.security;
 
-import java.io.IOException;
-import java.time.Duration;
-import java.util.concurrent.ConcurrentHashMap;
-
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import io.github.bucket4j.Bandwidth;
+import io.github.bucket4j.Bucket;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import io.github.bucket4j.Bandwidth;
-import io.github.bucket4j.Bucket;
-import io.github.bucket4j.Refill;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 
 @Component
 public class RateLimitFilter extends OncePerRequestFilter {
@@ -23,8 +23,17 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private static final int LOGIN_CAPACITY = 10;
     private static final int REGISTER_CAPACITY = 5;
 
-    private final ConcurrentHashMap<String, Bucket> loginBuckets = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, Bucket> registerBuckets = new ConcurrentHashMap<>();
+    // Bounded caches prevent memory exhaustion from IP churn.
+    // Entries expire after 2 minutes of inactivity so the bucket
+    // refill window stays consistent with the 1-minute Bandwidth limit.
+    private final Cache<String, Bucket> loginBuckets = Caffeine.newBuilder()
+            .maximumSize(10_000)
+            .expireAfterAccess(2, TimeUnit.MINUTES)
+            .build();
+    private final Cache<String, Bucket> registerBuckets = Caffeine.newBuilder()
+            .maximumSize(10_000)
+            .expireAfterAccess(2, TimeUnit.MINUTES)
+            .build();
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
@@ -42,9 +51,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
         Bucket bucket = null;
 
         if ("/auth/login".equals(path)) {
-            bucket = loginBuckets.computeIfAbsent(ip, k -> newBucket(LOGIN_CAPACITY));
+            bucket = loginBuckets.get(ip, k -> newBucket(LOGIN_CAPACITY));
         } else if ("/auth/register".equals(path)) {
-            bucket = registerBuckets.computeIfAbsent(ip, k -> newBucket(REGISTER_CAPACITY));
+            bucket = registerBuckets.get(ip, k -> newBucket(REGISTER_CAPACITY));
         }
 
         if (bucket != null && !bucket.tryConsume(1)) {

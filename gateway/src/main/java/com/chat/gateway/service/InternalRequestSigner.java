@@ -11,6 +11,7 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HexFormat;
+import java.util.UUID;
 
 @Service
 public class InternalRequestSigner {
@@ -27,17 +28,22 @@ public class InternalRequestSigner {
         }
     }
 
-    public record InternalToken(String signature, String timestamp) {}
+    public record InternalToken(String signature, String timestamp, String nonce) {}
 
-    public InternalToken sign(String userId) {
+    /**
+     * Signs an internal request. The HMAC covers userId, username, HTTP method, request path,
+     * timestamp, and a one-time nonce to prevent cross-endpoint and replay attacks.
+     */
+    public InternalToken sign(String userId, String username, String method, String path) {
         long ts = Instant.now().getEpochSecond();
+        String nonce = UUID.randomUUID().toString();
         try {
-            String payload = userId + ":" + ts;
+            String payload = userId + "\n" + username + "\n" + method + "\n" + path + "\n" + ts + "\n" + nonce;
             SecretKeySpec keySpec = new SecretKeySpec(signingKey.getBytes(StandardCharsets.UTF_8), HMAC_ALGORITHM);
             Mac mac = Mac.getInstance(HMAC_ALGORITHM);
             mac.init(keySpec);
             String signature = HexFormat.of().formatHex(mac.doFinal(payload.getBytes(StandardCharsets.UTF_8)));
-            return new InternalToken(signature, String.valueOf(ts));
+            return new InternalToken(signature, String.valueOf(ts), nonce);
         } catch (NoSuchAlgorithmException | InvalidKeyException e) {
             throw new IllegalStateException("Failed to sign internal request header", e);
         }
